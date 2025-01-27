@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <!-- Meta dane i linki -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpikeFlow</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Style CSS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <style>
+        /* Twoje style */
+        body {
+          background-color: #f0f0f0;
+        }
+        .navbar {
+          background-color: #0e152f;
+        }
+        .navbar-brand {
+          color: #fff;
+        }
+        .nav-link {
+          color: #0e152f;
+        }
+        .container {
+          padding-top: 20px;
+        }
+        .sidebar {
+          position: fixed;
+          top: 0;
+          bottom: 0;
+          left: 0;
+          z-index: 100;
+          padding: 20px;
+          background-color: #fff;
+        }
+        #wykryj-topologie {
+            position: absolute;
+            top: 230px;
+            left: 50px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+          <img src="{{ url_for('static', filename='assets/SpikeFlow.jpg') }}" alt="Logo SpikeFlow" width="50" height="50" class="mr-2">
+          <a class="navbar-brand" href="#">SpikeFlow</a>
+        </div>
+    </nav>
+    <!-- Zawartość strony -->
+    <div class="container">
+        <div class="row">
+          <div class="col-lg-12">
+            <ul class="nav nav-tabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <a class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" role="tab" aria-controls="home" aria-selected="true">Strona główna</a>
+              </li>
+              <li class="nav-item" role="presentation">
+                <a class="nav-link" id="topologia-tab" data-bs-toggle="tab" data-bs-target="#topologia" role="tab" aria-controls="topologia" aria-selected="false">Wykrywanie topologii</a>
+              </li>
+              <li class="nav-item" role="presentation">
+                <a class="nav-link" id="sdn-tab" data-bs-toggle="tab" data-bs-target="#sdn" role="tab" aria-controls="sdn" aria-selected="false">Sekcja eksperymentalna</a>
+              </li>
+            </ul>
+
+            <div class="tab-content">
+              <div class="tab-pane fade show active" id="home" role="tabpanel" aria-labelledby="home-tab">
+                <div class="row">
+                  <div class="col-lg-12">
+                    <h2>Grafana Dashboard</h2>
+                    <p> </p>
+                    <iframe src="http://192.168.31.118:3000/d/be1knm6i1xb7ka/turbotopo-dashboard?orgId=1&refresh=5s&from=1730747741423&to=1730748041423&theme=light" width="1400" height="2900"></iframe>
+                    <!--img src="{{ url_for('static', filename='assets/TurboTopo.jpg') }}" alt="TurboTopo"-->
+                  </div>
+                </div>
+              </div>
+              <div class="tab-pane fade" id="topologia" role="tabpanel" aria-labelledby="topologia-tab">
+                <div class="row">
+                    <div class="col-lg-7">
+                        <h2>Wykrywanie topologii</h2>
+                        <p>Wybierz element sieci, aby zobaczyć szczegóły.</p>
+                        <button id="wykryj-topologie" class="btn btn-primary" style="position: relative; top: 20px;" onclick="refreshPage()">Wykryj topologię</button>
+                        <svg id="mapa-topologii" width="800" height="600"></svg>
+                        <h2>Statystyki przepływów</h2>
+                        <pre id="statistics-data-display"></pre>
+                        <iframe src="http://192.168.31.118:3000/d/ee3j19wu49i4gc/flow-dashboard?orgId=1&from=1731224296274&to=1731245896274&theme=light" width="700" height="2200"></iframe>
+                        <!-- Twój iframe -->
+                    </div>
+                    <div class="col-lg-5">
+                      <div id="szczegoly-elementu" class="card" style="display: none;">
+                          <div class="card-header">
+                              <h5 class="card-title">Statystyki</h5>
+                          </div>
+                          <div class="card-body">
+                              <p id="szczegoly-tekst">Wybierz element sieci, aby zobaczyć szczegóły.</p>
+                          </div>
+                      </div>
+                  </div>
+                </div>
+            </div>
+
+              <div class="tab-pane fade" id="sdn" role="tabpanel" aria-labelledby="sdn-tab">
+                <div class="row">
+                    <div class="col-lg-12">
+                        <h2>Prześlij nowy skrypt</h2>
+                        <form id="upload-form" enctype="multipart/form-data">
+                            <input type="file" id="file-input" name="file" accept=".py" class="form-control">
+                            <button type="button" id="upload-script" class="btn btn-secondary mt-2">Prześlij skrypt</button>
+                        </form>
+                        <div id="upload-result"></div>  
+                      <h2>Wybierz skrypt, który chcesz przetestować.</h2>
+                      <select id="skrypt-openflow" class="form-select">
+                          <option value="">Wybierz skrypt OpenFlow</option>
+                          {% for skrypt in skrypty %}
+                          <option value="{{ skrypt }}">{{ skrypt }}</option>
+                          {% endfor %}
+                      </select>
+                      <button id="uruchom-skrypt" class="btn btn-primary">Uruchom skrypt</button>
+                      <button id="zatrzymaj-skrypt" class="btn btn-danger">Zatrzymaj skrypt</button>
+                      <div id="wynik-skryptu" class="mt-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS i inne skrypty -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- JavaScript -->
+    <script>
+        // dane z Flask
+        var topologyData = {{ topology_data | tojson }};
+        var statisticsData = {{ statistics_data | tojson }}.stats_data;
+
+        var svg, simulation, linkGroup, nodeGroup;
+        var nodes = [], links = [];
+        var nodeElements, linkElements;
+
+        function initializeTopologyMap(topologyData) {
+            svg = d3.select("#mapa-topologii");
+
+            nodes = topologyData.topology_data.nodes;
+            links = topologyData.topology_data.edges;
+
+            // Przetwarzanie hostów
+            var hosts = topologyData.topology_data.hosts;
+            hosts.forEach(function(host) {
+                // Przydzielenie unikalnego id dla hosta
+                host.id = "host_" + host.mac;
+                // Dodanie hosta do węzłów
+                nodes.push(host);
+                // Dodanie krawędzi między hostem a przełącznikiem
+                links.push({
+                    source: host.id, // id hosta
+                    target: host.dpid, // id przełącznika
+                    src_port: host.port,
+                    dst_port: null
+                });
+            });
+
+            // Tworzenie grup dla linków i węzłów
+            linkGroup = svg.append("g").attr("class", "links");
+            nodeGroup = svg.append("g").attr("class", "nodes");
+
+            // Inicjalizacja sił w symulacji
+            simulation = d3.forceSimulation(nodes)
+                .force("charge", d3.forceManyBody().strength(-200))
+                .force("link", d3.forceLink(links).id(d => d.id).distance(200))
+                .force("center", d3.forceCenter(400, 300));
+
+            // Rysowanie linków
+            linkElements = linkGroup.selectAll("line")
+                .data(links)
+                .enter().append("line")
+                .attr("stroke-width", 5)
+                .attr("stroke", "gray")
+                .on("click", function(event, d) {
+                    wyswietlSzczegoly("Link", d);
+                });
+
+            // Rysowanie węzłów
+            nodeElements = nodeGroup.selectAll("g")
+                .data(nodes)
+                .enter().append("g");
+
+            nodeElements.each(function(d) {
+                var node = d3.select(this);
+                var imageWidth, imageHeight, imageX, imageY, textDY;
+
+                if (d.mac) {
+                    // Host
+                    imageWidth = 50;
+                    imageHeight = 50;
+                    imageX = -25;
+                    imageY = -25;
+                    textDY = 35;
+
+                    node.append("image")
+                        .attr("xlink:href", "{{ url_for('static', filename='assets/host.png') }}")
+                        .attr("width", imageWidth)
+                        .attr("height", imageHeight)
+                        .attr("x", imageX)
+                        .attr("y", imageY);
+                } else {
+                    // Przełącznik
+                    imageWidth = 100;
+                    imageHeight = 100;
+                    imageX = -50;
+                    imageY = -60;
+                    textDY = 60;
+
+                    node.append("image")
+                        .attr("xlink:href", "{{ url_for('static', filename='assets/netgear2.png') }}")
+                        .attr("width", imageWidth)
+                        .attr("height", imageHeight)
+                        .attr("x", imageX)
+                        .attr("y", imageY);
+                }
+
+                // Dodanie tekstu z adresem IP
+                node.append("text")
+                    .attr("dx", 0)
+                    .attr("dy", textDY)
+                    .attr("text-anchor", "middle")
+                    .text(function(d) { return d.ip; });
+            });
+
+            nodeElements.call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended))
+                .on("click", function(event, d) {
+                    if (d.mac) {
+                        wyswietlSzczegoly("Host", d);
+                    } else {
+                        wyswietlSzczegoly("Router", d);
+                    }
+                });
+
+            simulation.on("tick", ticked);
+        }
+
+        function ticked() {
+            linkElements
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            nodeElements.attr("transform", function(d) {
+                return "translate(" + d.x + "," + d.y + ")";
+            });
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Funkcja do aktualizacji statystyk na mapie
+        function updateStatistics(statisticsData) {
+            console.log('Aktualizacja statystyk z danymi:', statisticsData);
+            // Aktualizuj kolory linków na podstawie opóźnienia
+            linkElements.attr("stroke", function(d) {
+                var delay = getDelayFromStatistics(d, statisticsData);
+                return getColorBasedOnDelay(delay);
+            });
+        }
+
+        function getDelayFromStatistics(linkData, statisticsData) {
+            var sourceId = linkData.source.id !== undefined ? linkData.source.id : linkData.source;
+            var targetId = linkData.target.id !== undefined ? linkData.target.id : linkData.target;
+            var linkKey = sourceId + "-" + targetId;
+            var reverseLinkKey = targetId + "-" + sourceId;
+
+            var delay = null;
+            if (statisticsData.delay_stats && statisticsData.delay_stats[linkKey] !== undefined) {
+                delay = statisticsData.delay_stats[linkKey];
+            } else if (statisticsData.delay_stats && statisticsData.delay_stats[reverseLinkKey] !== undefined) {
+                delay = statisticsData.delay_stats[reverseLinkKey];
+            }
+            return delay;
+        }
+
+        function getColorBasedOnDelay(delay) {
+            if (delay === null) {
+                return "gray"; // Brak danych opóźnienia
+            } else if (delay < 3) {
+                return "green";
+            } else if (delay < 10) {
+                return "orange";
+            } else {
+                return "red";
+            }
+        }
+
+        // Funkcja do okresowego pobierania nowych danych statystycznych
+        function fetchAndUpdateStatistics() {
+            fetch('/statistics_data')
+                .then(response => response.json())
+                .then(newStatisticsData => {
+                    console.log('Otrzymane dane statystyczne:', newStatisticsData);
+                    statisticsData = newStatisticsData.stats_data;
+                    updateStatistics(statisticsData);
+                })
+                .catch(error => console.error('Błąd podczas pobierania danych statystycznych:', error));
+        }
+
+        // Inicjalizacja mapy topologii przy pierwszym załadowaniu strony
+        initializeTopologyMap(topologyData);
+        // Aktualizacja statystyk przy pierwszym załadowaniu
+        updateStatistics(statisticsData);
+
+        // Ustawienie interwału do okresowego pobierania danych statystycznych 
+        setInterval(fetchAndUpdateStatistics, 5000);
+
+        // Funkcje do wyświetlania szczegółów elementów
+        function wyswietlSzczegoly(typ, dane) {
+            var szczegolyTekst = document.getElementById("szczegoly-tekst");
+            var szczegolyElementu = document.getElementById("szczegoly-elementu");
+
+            if (typ === "Router") {
+                var statystyki = znajdzStatystyki(typ, dane);
+                szczegolyTekst.innerHTML = "<strong>Wybrano węzeł: " + dane.id + "</strong><br>" +
+                                           "<strong>Statystyki portów:</strong><br>" + formatujPortStatystyki(statystyki) +
+                                           "<strong>Statystyki przepływów:</strong><br>" + formatujFlowStatystyki(statystyki);
+            } else if (typ === "Link") {
+                var sourceId = dane.source.id !== undefined ? dane.source.id : dane.source;
+                var targetId = dane.target.id !== undefined ? dane.target.id : dane.target;
+                var delay = getDelayFromStatistics(dane, statisticsData);
+                var delayText = delay !== null ? delay.toFixed(2) + " ms" : "Brak danych opóźnienia";
+                szczegolyTekst.innerHTML = "<strong>Wybrano łącze między węzłami: " + sourceId + " i " + targetId + "</strong><br>" +
+                                           "<strong>Opóźnienie:</strong> " + delayText;
+            } else if (typ === "Host") {
+                szczegolyTekst.innerHTML = "<strong>Wybrano host: " + dane.mac + "</strong><br>" +
+                                           "<strong>IP:</strong> " + dane.ip + "<br>" +
+                                           "<strong>MAC:</strong> " + dane.mac + "<br>" +
+                                           "<strong>Połączony do węzła:</strong> " + dane.dpid + " na porcie " + dane.port;
+            }
+
+            // Wyświetlenie panelu ze szczegółami
+            szczegolyElementu.style.display = "block";
+        }
+
+        function znajdzStatystyki(typ, dane) {
+            if (!statisticsData) {
+                console.error("Dane statystyk są niezdefiniowane.");
+                return null;
+            }
+
+            if (typ === "Router") {
+                var portStats = statisticsData.port_stats ? statisticsData.port_stats[dane.id] : null;
+                var flowStats = statisticsData.flow_stats ? statisticsData.flow_stats[dane.id] : null;
+                return { portStats: portStats, flowStats: flowStats };
+            } else if (typ === "Link") {
+                var sourceId = dane.source.id;
+                var targetId = dane.target.id;
+
+                for (var linkId in statisticsData.link_stats) {
+                    var link = statisticsData.link_stats[linkId];
+                    if ((link.src_dpid == sourceId && link.dst_dpid == targetId) ||
+                        (link.src_dpid == targetId && link.dst_dpid == sourceId)) {
+                        return link;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        function formatujPortStatystyki(statystyki) {
+            if (!statystyki || !statystyki.portStats) {
+                return "Brak dostępnych statystyk dla portów tego węzła.";
+            }
+
+            var sformatowane = "";
+            for (var port in statystyki.portStats) {
+                if (statystyki.portStats.hasOwnProperty(port)) {
+                    var portData = statystyki.portStats[port];
+                    sformatowane += "Port " + port + ":<br>" +
+                                    "  - RX Packets: " + portData.rx_packets + "<br>" +
+                                    "  - TX Packets: " + portData.tx_packets + "<br>" +
+                                    "  - RX Bytes: " + portData.rx_bytes + "<br>" +
+                                    "  - TX Bytes: " + portData.tx_bytes + "<br>";
+                }
+            }
+            return sformatowane;
+        }
+
+        function formatujFlowStatystyki(statystyki) {
+            if (!statystyki || !statystyki.flowStats) {
+                return "Brak dostępnych statystyk dla przepływów tego węzła.";
+            }
+
+            var sformatowane = "";
+            statystyki.flowStats.forEach(function(flow, index) {
+                sformatowane += "Flow " + (index + 1) + ":<br>" +
+                                "  - Priority: " + flow.priority + "<br>" +
+                                "  - Cookie: " + flow.cookie + "<br>" +
+                                "  - Packet Count: " + flow.packet_count + "<br>" +
+                                "  - Byte Count: " + flow.byte_count + "<br>" +
+                                "  - Duration: " + flow.duration_sec + "s " + flow.duration_nsec + "ns<br>" +
+                                "  - Idle Timeout: " + flow.idle_timeout + "s<br>" +
+                                "  - Hard Timeout: " + flow.hard_timeout + "s<br>" +
+                                "  - Table ID: " + flow.table_id + "<br>" +
+                                "  - Flags: " + flow.flags + "<br>";
+
+                // Wyświetlanie pól dopasowania
+                sformatowane += "  - Match Fields:<br>";
+                Object.keys(flow.match_fields).forEach(function(field) {
+                    sformatowane += "    * " + field + ": " + flow.match_fields[field] + "<br>";
+                });
+
+                // Wyświetlanie akcji
+                sformatowane += "  - Actions:<br>";
+                flow.actions.forEach(function(action) {
+                    switch (action.type) {
+                        case "OUTPUT":
+                            sformatowane += "    * Output to Port: " + action.port + "<br>";
+                            break;
+                        case "SET_FIELD":
+                            sformatowane += "    * Set Field: " + action.field + " = " + action.value + "<br>";
+                            break;
+                        case "SET_VLAN_VID":
+                            sformatowane += "    * Set VLAN VID: " + action.vlan_vid + "<br>";
+                            break;
+                        case "SET_DL_SRC":
+                            sformatowane += "    * Set Data Link Source (MAC): " + action.dl_src + "<br>";
+                            break;
+                        case "SET_DL_DST":
+                            sformatowane += "    * Set Data Link Destination (MAC): " + action.dl_dst + "<br>";
+                            break;
+                        case "SET_NW_SRC":
+                            sformatowane += "    * Set Network Source (IP): " + action.nw_src + "<br>";
+                            break;
+                        case "SET_NW_DST":
+                            sformatowane += "    * Set Network Destination (IP): " + action.nw_dst + "<br>";
+                            break;
+                        case "PUSH_VLAN":
+                            sformatowane += "    * Push VLAN with Ethertype: " + action.ethertype + "<br>";
+                            break;
+                        case "POP_VLAN":
+                            sformatowane += "    * Pop VLAN<br>";
+                            break;
+                        case "SET_QUEUE":
+                            sformatowane += "    * Set Queue ID: " + action.queue_id + "<br>";
+                            break;
+                        case "GROUP":
+                            sformatowane += "    * Group Action with Group ID: " + action.group_id + "<br>";
+                            break;
+                        default:
+                            sformatowane += "    * Unknown Action: " + JSON.stringify(action) + "<br>";
+                            break;
+                    }
+                });
+
+                sformatowane += "<br>";
+            });
+
+            return sformatowane;
+        }
+
+        // Funkcje do odświeżania strony i ustawiania aktywnej zakładki
+        function refreshPage() {
+            // Zapisz aktualnie aktywną zakładkę w localStorage
+            var activeTab = document.querySelector('.nav-link.active').getAttribute('id');
+            localStorage.setItem('activeTab', activeTab);
+
+            // Odśwież stronę
+            location.reload();
+        }
+
+        function setActiveTab() {
+            // Sprawdź, czy istnieje zapisana zakładka w localStorage
+            var activeTab = localStorage.getItem('activeTab');
+            if (activeTab) {
+                // Wybierz zapisaną zakładkę
+                document.getElementById(activeTab).click();
+            }
+        }
+
+        // Wywołaj funkcję setActiveTab po załadowaniu strony
+        window.onload = setActiveTab;
+    </script>
+    <script>
+        $(document).ready(function() {
+            let intervalId;
+
+            $('#uruchom-skrypt').click(function() {
+                let selectedScript = $('#skrypt-openflow').val();
+                if (selectedScript) {
+                    $.ajax({
+                        url: '/run-script',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ script_name: selectedScript }),
+                        success: function(response) {
+                            if (response.error) {
+                                $('#wynik-skryptu').html('<div class="alert alert-danger">Błąd: ' + response.error + '</div>');
+                            } else {
+                                $('#wynik-skryptu').html('<div class="alert alert-success">' + response.output + '</div>');
+                                // Rozpocznij odczyt danych wyjściowych
+                                pollOutput(selectedScript);
+                            }
+                        },
+                        error: function() {
+                            $('#wynik-skryptu').html('<div class="alert alert-danger">Wystąpił błąd podczas uruchamiania skryptu.</div>');
+                        }
+                    });
+                } else {
+                    $('#wynik-skryptu').html('<div class="alert alert-warning">Proszę wybrać skrypt.</div>');
+                }
+            });
+
+            function pollOutput(scriptName) {
+                if (intervalId) {
+                    clearInterval(intervalId); // Wyczyść poprzedni interwał, jeśli istnieje
+                }
+
+                intervalId = setInterval(function() {
+                    $.ajax({
+                        url: '/script-output/' + scriptName,
+                        method: 'GET',
+                        success: function(response) {
+                            if (response.error) {
+                                $('#wynik-skryptu').html('<div class="alert alert-danger">Błąd: ' + response.error + '</div>');
+                            } else {
+                                $('#wynik-skryptu').html('<div class="alert alert-info"><pre>' + response.output + '</pre></div>');
+                                if (!response.running) {
+                                    clearInterval(intervalId); // Zatrzymaj interwał, gdy skrypt przestanie działać
+                                    intervalId = null; // Resetuj ID interwału
+                                }
+                            }
+                        }
+                    });
+                }, 1000); // Sprawdza co sekundę
+            }
+
+            $('#zatrzymaj-skrypt').click(function() {
+                let selectedScript = $('#skrypt-openflow').val();
+                if (selectedScript) {
+                    $.ajax({
+                        url: '/stop-script',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ script_name: selectedScript }),
+                        success: function(response) {
+                            if (response.error) {
+                                $('#wynik-skryptu').html('<div class="alert alert-danger">Błąd: ' + response.error + '</div>');
+                            } else {
+                                $('#wynik-skryptu').html('<div class="alert alert-success">' + response.output + '</div>');
+                                clearInterval(intervalId); // Zatrzymaj interwał, gdy skrypt został zatrzymany
+                                intervalId = null; // Resetuj ID interwału
+                            }
+                        },
+                        error: function() {
+                            $('#wynik-skryptu').html('<div class="alert alert-danger">Wystąpił błąd podczas zatrzymywania skryptu.</div>');
+                        }
+                    });
+                } else {
+                    $('#wynik-skryptu').html('<div class="alert alert-warning">Proszę wybrać skrypt.</div>');
+                }
+            });
+        });
+    </script>
+    <script>
+        $(document).ready(function() {
+            $('#upload-script').click(function() {
+                let formData = new FormData();
+                let fileInput = $('#file-input')[0].files[0];
+                
+                if (fileInput) {
+                    formData.append('file', fileInput);
+                    
+                    $.ajax({
+                        url: '/upload-script',
+                        method: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function(response) {
+                            if (response.error) {
+                                $('#upload-result').html('<div class="alert alert-danger">Błąd: ' + response.error + '</div>');
+                            } else {
+                                $('#upload-result').html('<div class="alert alert-success">' + response.message + '</div>');
+                                $('#skrypt-openflow').append(new Option(fileInput.name, fileInput.name));
+                            }
+                        },
+                        error: function() {
+                            $('#upload-result').html('<div class="alert alert-danger">Wystąpił błąd podczas przesyłania skryptu.</div>');
+                        }
+                    });
+                } else {
+                    $('#upload-result').html('<div class="alert alert-warning">Proszę wybrać plik .py do przesłania.</div>');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
